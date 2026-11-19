@@ -6,10 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_dependabot_covers_every_dependency_surface() -> None:
+def test_dependabot_covers_supported_dependency_surfaces() -> None:
     text = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     ecosystems = set(re.findall(r"package-ecosystem:\s*(\S+)", text))
-    assert ecosystems == {"github-actions", "uv", "docker-compose"}
+    # docker-compose is excluded on purpose, see the comment in dependabot.yml.
+    assert ecosystems == {"github-actions", "uv"}
     # Every ecosystem entry needs a schedule, otherwise Dependabot rejects the file.
     assert text.count("schedule:") == len(ecosystems)
 
