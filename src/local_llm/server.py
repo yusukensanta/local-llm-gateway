@@ -1,4 +1,5 @@
 """Read-only MCP tools backed by Ollama."""
+
 from mcp.server.fastmcp import FastMCP
 
 from local_llm.config import get_settings

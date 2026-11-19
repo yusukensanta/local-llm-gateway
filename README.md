@@ -63,6 +63,7 @@ All tools are read-only. In particular, `local_review_diff` currently reviews **
 
 - Windows, Linux, or WSL
 - **Python 3.14.x** (the project intentionally rejects other Python versions)
+- [uv](https://docs.astral.sh/uv/) (installs and manages Python 3.14 for you)
 - [Git](https://git-scm.com/)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
 - [Ollama](https://ollama.com/)
@@ -137,7 +138,7 @@ The MCP server reads the following environment variables:
 | `LOCAL_LLM_REQUEST_TIMEOUT` | `180` | Ollama request timeout, in seconds (maximum: 900) |
 | `LOCAL_LLM_MAX_OUTPUT_TOKENS` | `1200` | Maximum generated output tokens (maximum: 8192) |
 
-The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you provide. Other variables can be set in the environment inherited by Claude Code before it starts.
+The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you provide. Other variables can be set in the environment inherited by Claude Code before it starts. The server does not read `.env` files; invalid values (for example `LOCAL_LLM_MAX_FILES=0`) fail at startup.
 
 ## Model selection and performance
 
@@ -152,16 +153,22 @@ See [model selection notes](docs/model-selection.md).
 
 ## Development
 
-Python 3.14.x is required.
+The toolchain is Python 3.14, [uv](https://docs.astral.sh/uv/), [Ruff](https://docs.astral.sh/ruff/) and [ty](https://docs.astral.sh/ty/) (a pre-1.0 type checker; its version is pinned by `uv.lock`).
 
 ```bash
-python -m pip install -e ".[dev]"
-python -m ruff check .
-python -m mypy src
-python -m pytest -q
+uv sync                      # create .venv and install locked dependencies
+bash scripts/check.sh        # ruff format --check, ruff check, ty check, pytest --cov (min 80%)
+
+# or individually
+uv run ruff format .
+uv run ruff check .
+uv run ty check
+uv run pytest --cov
 ```
 
-GitHub Actions checks the Python 3.14 environment on Ubuntu and Windows, validates the shell and PowerShell scripts, runs the Pester script tests, and validates the optional Docker Compose configuration.
+On Windows use `.\scripts\check.ps1`. After changing dependencies, run `uv lock` and commit `uv.lock`.
+
+GitHub Actions runs the same gates on Ubuntu and Windows, checks that `uv.lock` is current, runs ShellCheck and the Pester script tests, and validates the optional Docker Compose configuration.
 
 ## Optional: LiteLLM
 
@@ -182,7 +189,8 @@ The proxy is configured to bind to loopback on port `4000`. Treat the master key
 
 ## Security and limitations
 
-- **Workspace boundary:** requested paths must resolve inside `LOCAL_LLM_WORKSPACE`.
+- **Workspace boundary:** requested paths must resolve inside `LOCAL_LLM_WORKSPACE`; symlinks that point outside are skipped or refused.
+- **Secrets are never read:** `.env` / `.env.*` (except `.env.example`), private keys, `.ssh/`, `.aws/`, `.netrc` and similar files are blocked, and also excluded from `local_review_diff`.
 - **Bounded input:** file count, individual file size, and prompt/output sizes are limited.
 - **Read-only tools:** the MCP tools do not write files, apply patches, or run shell commands.
 - **Untrusted output:** local model responses can be incorrect, incomplete, or misleading. Verify claims against source code and run tests independently.

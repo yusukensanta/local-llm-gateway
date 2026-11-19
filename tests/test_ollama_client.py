@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -6,43 +7,66 @@ import pytest
 from local_llm.config import Settings
 from local_llm.ollama_client import OllamaClient, OllamaError
 
+Install = Callable[[Callable[[httpx.Request], httpx.Response]], None]
 
-@pytest.mark.asyncio
-async def test_chat_payload_and_response(monkeypatch: pytest.MonkeyPatch) -> None:
+
+async def test_chat_payload_and_response(mock_ollama: Install) -> None:
     seen: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen["path"] = request.url.path
+        seen["url"] = str(request.url)
         seen["payload"] = json.loads(request.content)
         return httpx.Response(200, json={"message": {"content": "ok"}})
 
-    original = httpx.AsyncClient
+    mock_ollama(handler)
+    settings = Settings(ollama_base_url="http://unit.test/", max_output_tokens=77)
+    assert await OllamaClient(settings).chat("hello", system="sys") == "ok"
+    assert seen["url"] == "http://unit.test/api/chat"
+    payload = seen["payload"]
+    assert isinstance(payload, dict)
+    assert payload["stream"] is False
+    assert payload["model"] == "qwen2.5-coder:7b"
+    assert payload["options"] == {"num_predict": 77}
+    assert payload["messages"] == [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "hello"},
+    ]
 
-    class MockClient(original):
-        def __init__(self, **kwargs: object) -> None:
-            super().__init__(transport=httpx.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(httpx, "AsyncClient", MockClient)
-    result = await OllamaClient(Settings(ollama_base_url="http://unit.test")).chat(
-        "hello", system="test"
-    )
-    assert result == "ok"
-    assert seen["path"] == "/api/chat"
-    assert isinstance(seen["payload"], dict)
-    assert seen["payload"]["stream"] is False  # type: ignore[index]
+async def test_chat_model_override(mock_ollama: Install) -> None:
+    seen: dict[str, object] = {}
 
-
-@pytest.mark.asyncio
-async def test_chat_raises_for_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(503, text="offline")
+        seen["model"] = json.loads(request.content)["model"]
+        return httpx.Response(200, json={"message": {"content": "ok"}})
 
-    original = httpx.AsyncClient
+    mock_ollama(handler)
+    await OllamaClient(Settings()).chat("p", system="s", model="other")
+    assert seen["model"] == "other"
 
-    class MockClient(original):
-        def __init__(self, **kwargs: object) -> None:
-            super().__init__(transport=httpx.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(httpx, "AsyncClient", MockClient)
-    with pytest.raises(OllamaError):
+async def test_chat_raises_for_http_error(mock_ollama: Install) -> None:
+    mock_ollama(lambda _request: httpx.Response(503, text="offline"))
+    with pytest.raises(OllamaError, match="request failed"):
+        await OllamaClient(Settings()).chat("hello", system="test")
+
+
+async def test_chat_raises_for_connection_error(mock_ollama: Install) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    mock_ollama(handler)
+    with pytest.raises(OllamaError, match="refused"):
+        await OllamaClient(Settings()).chat("hello", system="test")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"message": {}}, {"message": {"content": "   "}}, {"message": {"content": 5}}],
+)
+async def test_chat_rejects_empty_or_invalid_message(
+    mock_ollama: Install, body: dict[str, object]
+) -> None:
+    mock_ollama(lambda _request: httpx.Response(200, json=body))
+    with pytest.raises(OllamaError, match="empty or invalid"):
         await OllamaClient(Settings()).chat("hello", system="test")

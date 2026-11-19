@@ -16,3 +16,8 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+.coverage
+.coverage.*
+htmlcov/
+.ty_cache/

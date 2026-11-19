@@ -8,14 +8,36 @@ version = "0.1.0"
 description = "Read-only MCP tools for local Ollama coding assistance"
 readme = "README.md"
 requires-python = "==3.14.*"
-license = { text = "MIT" }
-dependencies = ["httpx>=0.27,<1", "mcp>=1.2,<2", "pydantic>=2.8,<3", "pydantic-settings>=2.4,<3"]
-
-[project.optional-dependencies]
-dev = ["mypy>=1.11,<2", "pytest>=8.3,<9", "pytest-asyncio>=0.24,<1", "ruff>=0.6,<1"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "yusukensanta" }]
+keywords = ["mcp", "ollama", "claude-code", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "httpx>=0.27,<1",
+    "mcp>=1.2,<2",
+    "pydantic>=2.8,<3",
+    "pydantic-settings>=2.4,<3",
+]
 
 [project.scripts]
 local-llm-mcp = "local_llm.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=1.0",
+    "pytest-cov>=6",
+    "ruff>=0.6,<1",
+    "ty>=0.0.1",
+]
+
+[tool.uv]
+default-groups = ["dev"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/local_llm"]
@@ -23,15 +45,36 @@ packages = ["src/local_llm"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["local_llm"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = ["if __name__ == .__main__.:"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "C4", "PT", "RUF", "ASYNC"]
 
-[tool.mypy]
-python_version = "3.14"
-strict = true
-mypy_path = "src"
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S603", "S607"]
+
+[tool.ty.environment]
+python-version = "3.14"
+root = ["src", "."]
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.rules]
+all = "error"

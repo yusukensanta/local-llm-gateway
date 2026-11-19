@@ -1,4 +1,5 @@
 """Shared source loading helpers."""
+
 from local_llm.config import Settings
 from local_llm.security.workspace import collect_text_files, resolve_allowed_path
 

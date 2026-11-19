@@ -1,4 +1,5 @@
-"""Runtime settings."""
+"""Runtime settings, read from environment variables only."""
+
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -11,15 +12,22 @@ if sys.version_info[:2] != (3, 14):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    """Server settings.
+
+    Values come from environment variables (``OLLAMA_BASE_URL`` etc.). Field names are
+    accepted as keyword arguments too, which keeps tests and programmatic use readable.
+    Unknown keyword arguments are rejected instead of silently dropped. No ``.env`` file
+    is read: the server's working directory is the user's project, not this repository.
+    """
+
+    model_config = SettingsConfigDict(extra="forbid", populate_by_name=True)
+
     ollama_base_url: str = Field(
         default="http://localhost:11434", validation_alias="OLLAMA_BASE_URL"
     )
     ollama_model: str = Field(default="qwen2.5-coder:7b", validation_alias="OLLAMA_MODEL")
     workspace: Path = Field(default_factory=Path.cwd, validation_alias="LOCAL_LLM_WORKSPACE")
-    max_file_bytes: int = Field(
-        default=200_000, gt=0, validation_alias="LOCAL_LLM_MAX_FILE_BYTES"
-    )
+    max_file_bytes: int = Field(default=200_000, gt=0, validation_alias="LOCAL_LLM_MAX_FILE_BYTES")
     max_files: int = Field(default=20, gt=0, le=100, validation_alias="LOCAL_LLM_MAX_FILES")
     request_timeout: float = Field(
         default=180, gt=0, le=900, validation_alias="LOCAL_LLM_REQUEST_TIMEOUT"

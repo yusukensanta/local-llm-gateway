@@ -1,5 +1,6 @@
 """Asynchronous Ollama API client."""
-from typing import Any
+
+from typing import Any, Protocol
 
 import httpx
 
@@ -8,6 +9,12 @@ from local_llm.config import Settings
 
 class OllamaError(RuntimeError):
     """Ollama request failed."""
+
+
+class ChatClient(Protocol):
+    """Minimal interface the tools need; lets tests inject a stub."""
+
+    async def chat(self, prompt: str, *, system: str, model: str | None = None) -> str: ...
 
 
 class OllamaClient:
