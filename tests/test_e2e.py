@@ -65,13 +65,13 @@ async def test_full_round_trip(fake_ollama: str, tmp_path: Path) -> None:
         }
 
         ok = await session.call_tool("local_analyze", {"path": "app.py", "question": "what?"})
-        assert not ok.isError
+        assert not ok.is_error
         assert "fake-review" in json.dumps([c.model_dump() for c in ok.content])
 
         blocked = await session.call_tool("local_summarize", {"path": ".env"})
-        assert blocked.isError
+        assert blocked.is_error
         escaped = await session.call_tool("local_summarize", {"path": "../../etc/passwd"})
-        assert escaped.isError
+        assert escaped.is_error
 
     prompts = json.dumps(REQUESTS)
     assert "def hello()" in prompts

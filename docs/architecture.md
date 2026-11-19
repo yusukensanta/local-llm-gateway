@@ -8,7 +8,7 @@ Claude delegates selected read-only analysis tasks through MCP (stdio). Only the
 
 | Module | Responsibility |
 | --- | --- |
-| `local_llm.server` | FastMCP server; registers the four `local_*` tools |
+| `local_llm.server` | MCP server (`MCPServer`); registers the four `local_*` tools |
 | `local_llm.config` | Environment-driven `Settings` with validated limits; Python 3.14 guard |
 | `local_llm.security.workspace` | Path resolution, workspace boundary, sensitive-file deny-list, bounded UTF-8 reads |
 | `local_llm.ollama_client` | Async `/api/chat` client and the `ChatClient` protocol the tools depend on |
