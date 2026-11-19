@@ -25,6 +25,7 @@ async def test_chat_payload_and_response(mock_ollama: Install) -> None:
     payload = seen["payload"]
     assert isinstance(payload, dict)
     assert payload["stream"] is False
+    assert payload["think"] is False
     assert payload["model"] == "qwen2.5-coder:7b"
     assert payload["options"] == {"num_predict": 77}
     assert payload["messages"] == [
@@ -89,3 +90,15 @@ async def test_chat_error_includes_type_and_detail(mock_ollama: Install) -> None
     mock_ollama(handler)
     with pytest.raises(OllamaError, match=r"request failed: ConnectError: refused"):
         await OllamaClient(Settings()).chat("hello", system="test")
+
+
+async def test_chat_sends_think_when_enabled(mock_ollama: Install) -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["think"] = json.loads(request.content)["think"]
+        return httpx.Response(200, json={"message": {"content": "ok"}})
+
+    mock_ollama(handler)
+    await OllamaClient(Settings(think=True)).chat("p", system="s")
+    assert seen["think"] is True

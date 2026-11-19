@@ -31,7 +31,16 @@ def sandbox(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     shutil.copytree(REAL_SCRIPTS, tmp_path / "repo" / "scripts")
     # Keep system tools (dirname, cd, ...) but nothing that could be a real uv/ollama/claude.
     minimal = os.pathsep.join(["/usr/bin", "/bin"])
-    env = {"PATH": f"{bin_dir}{os.pathsep}{minimal}", "FAKE_LOG": str(log), "HOME": str(tmp_path)}
+    env = {
+        "PATH": f"{bin_dir}{os.pathsep}{minimal}",
+        "FAKE_LOG": str(log),
+        "HOME": str(tmp_path),
+        # Unreachable on purpose: tests must never talk to a real local Ollama.
+        "OLLAMA_BASE_URL": "http://127.0.0.1:1",
+    }
+    # Default curl fails like an unreachable server (no real network, even on WSL where
+    # closed ports hang). Individual tests overwrite it with a scripted fake.
+    make_fake(bin_dir, "curl", "exit 7")
     return bin_dir, log, env
 
 
@@ -97,10 +106,10 @@ def test_install_models_honours_env_and_fails_without_ollama(
     bin_dir, log, env = sandbox
     result = run("install-models.sh", env=env)
     assert result.returncode == 1
-    assert "Install Ollama first" in result.stderr
+    assert "Could not reach Ollama" in result.stderr
     make_fake(bin_dir, "ollama")
     run("install-models.sh", env={**env, "OLLAMA_MODEL": "custom:1"})
-    assert log.read_text().strip() == "ollama pull custom:1"
+    assert log.read_text().splitlines()[-1] == "ollama pull custom:1"
 
 
 def test_install_models_propagates_pull_failure(
@@ -160,3 +169,71 @@ def test_start_requires_setup(sandbox: tuple[Path, Path, dict[str, str]]) -> Non
     result = run("start.sh", env=env)
     assert result.returncode == 1
     assert "setup.sh first" in result.stderr
+
+
+def fake_venv_python(root: Path) -> None:
+    fake_python = root / "repo" / ".venv" / "bin" / "python"
+    fake_python.parent.mkdir(parents=True)
+    fake_python.write_text("#!/usr/bin/env bash\n")
+    fake_python.chmod(0o755)
+
+
+def test_register_passes_model_when_given(
+    sandbox: tuple[Path, Path, dict[str, str]], tmp_path: Path
+) -> None:
+    bin_dir, log, env = sandbox
+    make_fake(bin_dir, "claude")
+    fake_venv_python(tmp_path)
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    result = run("register-mcp.sh", "--model", "qwen3:4b", str(workspace), env=env)
+    assert result.returncode == 0, result.stderr
+    add = log.read_text().splitlines()[1]
+    assert "--env OLLAMA_MODEL=qwen3:4b" in add
+    assert f"--env LOCAL_LLM_WORKSPACE={workspace.resolve()}" in add
+
+
+def test_register_omits_model_by_default(
+    sandbox: tuple[Path, Path, dict[str, str]], tmp_path: Path
+) -> None:
+    bin_dir, log, env = sandbox
+    make_fake(bin_dir, "claude")
+    fake_venv_python(tmp_path)
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    assert run("register-mcp.sh", str(workspace), env=env).returncode == 0
+    assert "OLLAMA_MODEL" not in log.read_text()
+
+
+def test_register_rejects_unknown_option_and_missing_model_value(
+    sandbox: tuple[Path, Path, dict[str, str]], tmp_path: Path
+) -> None:
+    bin_dir, _, env = sandbox
+    make_fake(bin_dir, "claude")
+    fake_venv_python(tmp_path)
+    assert run("register-mcp.sh", "--bogus", env=env).returncode == 2
+    assert run("register-mcp.sh", "--model", env=env).returncode == 2
+
+
+def test_install_models_falls_back_to_api_without_cli(
+    sandbox: tuple[Path, Path, dict[str, str]],
+) -> None:
+    bin_dir, log, env = sandbox
+    make_fake(bin_dir, "curl", 'echo \'{"status":"success"}\'')
+    result = run(
+        "install-models.sh", "qwen3:4b", env={**env, "OLLAMA_BASE_URL": "http://h.test:11434"}
+    )
+    assert result.returncode == 0, result.stderr
+    call = log.read_text()
+    assert "http://h.test:11434/api/pull" in call
+    assert '"model":"qwen3:4b"' in call
+
+
+def test_install_models_api_fallback_reports_ollama_error(
+    sandbox: tuple[Path, Path, dict[str, str]],
+) -> None:
+    bin_dir, _, env = sandbox
+    make_fake(bin_dir, "curl", 'echo \'{"error":"pull model manifest: file does not exist"}\'')
+    result = run("install-models.sh", "nope:1", env=env)
+    assert result.returncode == 1
+    assert "file does not exist" in result.stderr

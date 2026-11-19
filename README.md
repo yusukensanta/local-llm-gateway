@@ -98,7 +98,13 @@ bash scripts/install-models.sh
 
 # Register the MCP server for the current project workspace
 bash scripts/register-mcp.sh "$PWD"
+
+# Or pick the model explicitly (it must already be pulled in Ollama)
+bash scripts/install-models.sh qwen3:4b
+bash scripts/register-mcp.sh --model qwen3:4b "$PWD"
 ```
+
+`install-models.sh` falls back to the Ollama HTTP API (`OLLAMA_BASE_URL`) when the `ollama` CLI is not installed, which is the normal case in WSL with Ollama on Windows. On Windows use `.\scripts\register-mcp.ps1 -Model qwen3:4b`.
 
 After registration, restart Claude Code (or start a new session) and run:
 
@@ -137,6 +143,7 @@ The MCP server reads the following environment variables:
 | `LOCAL_LLM_MAX_FILES` | `20` | Maximum number of files collected (maximum configurable value: 100) |
 | `LOCAL_LLM_REQUEST_TIMEOUT` | `180` | Ollama request timeout, in seconds (maximum: 900) |
 | `LOCAL_LLM_MAX_OUTPUT_TOKENS` | `1200` | Maximum generated output tokens (maximum: 8192) |
+| `LOCAL_LLM_THINK` | `false` | Let reasoning models (for example `qwen3`) think before answering. Thinking consumes output tokens, so keep it off unless you raise the token limit |
 
 The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you provide. Other variables can be set in the environment inherited by Claude Code before it starts. The server does not read `.env` files; invalid values (for example `LOCAL_LLM_MAX_FILES=0`) fail at startup.
 
@@ -144,7 +151,7 @@ The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you pro
 
 The default model is a starting point, not a universal recommendation.
 
-- Start with the default `qwen2.5-coder:7b` model.
+- Start with the default `qwen2.5-coder:7b` model, or `--model qwen3:4b` for a faster option that fits fully in 6 GB of VRAM (measured on a GTX 1660 SUPER: about 70 tok/s versus about 13 tok/s for the 7B model, which partly spills to CPU).
 - Check model placement and resource usage with `ollama ps` and `nvidia-smi`.
 - If inference is slow or memory is constrained, try a smaller model or reduce the amount of source text sent for a task.
 - Evaluate models using representative tasks from your own repositories; compare correctness and usefulness, not just generation speed.

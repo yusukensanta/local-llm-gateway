@@ -9,3 +9,5 @@
 - **`No unstaged Git diff found`:** `local_review_diff` only reviews unstaged tracked changes; staged and untracked files are ignored.
 - **Slow inference:** inspect `ollama ps`, VRAM/RAM and context length.
 - **`.env` has no effect on the MCP server:** the server reads environment variables only. Set them in the shell that launches Claude Code, or with `claude mcp add --env`.
+- **Requests hang or `Server disconnected without sending a response`:** Ollama itself may be stuck (seen on Windows after loading several models). Restart Ollama and retry; in WSL mirrored mode, connections to closed ports also hang instead of failing fast.
+- **Empty or `invalid message` replies from a Qwen3 model:** thinking used up the output tokens. Keep `LOCAL_LLM_THINK` unset (false) or raise `LOCAL_LLM_MAX_OUTPUT_TOKENS`.

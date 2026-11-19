@@ -4,7 +4,10 @@
 Register the MCP server with Claude Code (user scope) for one workspace.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
-param([string]$Workspace = (Get-Location).Path)
+param(
+    [string]$Workspace = (Get-Location).Path,
+    [string]$Model
+)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
@@ -15,7 +18,9 @@ if ($PSCmdlet.ShouldProcess("Claude Code MCP registry", "Register local-llm")) {
     # Replace a previous registration so re-running the script is idempotent.
     try { & claude mcp remove local-llm --scope user 2>&1 | Out-Null } catch { $null = $_ }
     $global:LASTEXITCODE = 0
-    & claude mcp add local-llm --scope user --env "LOCAL_LLM_WORKSPACE=$ResolvedWorkspace" -- $Python -m local_llm.server
+    $EnvArgs = @("--env", "LOCAL_LLM_WORKSPACE=$ResolvedWorkspace")
+    if ($Model) { $EnvArgs += @("--env", "OLLAMA_MODEL=$Model") }
+    & claude mcp add local-llm --scope user @EnvArgs -- $Python -m local_llm.server
     if ($LASTEXITCODE -ne 0) { throw "MCP registration failed." }
     Write-Host "Registered local-llm for workspace: $ResolvedWorkspace"
 }

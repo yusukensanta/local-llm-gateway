@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     request_timeout: float = Field(
         default=180, gt=0, le=900, validation_alias="LOCAL_LLM_REQUEST_TIMEOUT"
     )
+    think: bool = Field(default=False, validation_alias="LOCAL_LLM_THINK")
     max_output_tokens: int = Field(
         default=1200, gt=0, le=8192, validation_alias="LOCAL_LLM_MAX_OUTPUT_TOKENS"
     )

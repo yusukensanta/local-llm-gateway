@@ -12,6 +12,7 @@ def test_defaults() -> None:
     assert s.ollama_model == "qwen2.5-coder:7b"
     assert s.max_files == 20
     assert s.workspace == Path.cwd()
+    assert s.think is False
 
 
 def test_environment_aliases(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -63,3 +64,11 @@ def test_env_file_in_cwd_is_not_read(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     (tmp_path / ".env").write_text("OLLAMA_MODEL=from-dotenv\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     assert Settings().ollama_model == "qwen2.5-coder:7b"
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("true", True), ("0", False)])
+def test_think_flag_from_environment(
+    monkeypatch: pytest.MonkeyPatch, raw: str, expected: bool
+) -> None:
+    monkeypatch.setenv("LOCAL_LLM_THINK", raw)
+    assert Settings().think is expected

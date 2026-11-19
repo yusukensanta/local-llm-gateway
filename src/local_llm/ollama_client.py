@@ -29,6 +29,8 @@ class OllamaClient:
                 {"role": "user", "content": prompt},
             ],
             "stream": False,
+            # Reasoning models (e.g. qwen3) otherwise spend num_predict on hidden thinking.
+            "think": self.settings.think,
             "options": {"num_predict": self.settings.max_output_tokens},
         }
         try:
