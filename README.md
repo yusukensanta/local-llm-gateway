@@ -224,6 +224,8 @@ On Windows use `.\scripts\check.ps1`. After changing dependencies, run `uv lock`
 
 GitHub Actions runs the same gates on Ubuntu and Windows, checks that `uv.lock` is current, runs ShellCheck and the Pester script tests, and validates the optional Docker Compose configuration.
 
+Dependabot opens weekly update PRs for GitHub Actions and Python dependencies. It does not cover the optional LiteLLM image in `docker-compose.yml`: the image lives on `docker.litellm.ai`, which Dependabot cannot read. That image is pinned by digest, so update the tag and digest by hand when you want a newer LiteLLM release.
+
 ## Optional: LiteLLM
 
 LiteLLM is not needed for Claude Code to call the local MCP tools.
@@ -238,6 +240,8 @@ To run the optional gateway:
 ```bash
 docker compose --profile gateway up -d
 ```
+
+The LiteLLM image is pinned by digest and is not updated automatically; see [Development](#development).
 
 The proxy is configured to bind to loopback on port `4000`. Treat the master key and provider credentials as secrets; do not commit your real `.env` file.
 
