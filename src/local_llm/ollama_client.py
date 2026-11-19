@@ -17,7 +17,10 @@ class OllamaClient:
     async def chat(self, prompt: str, *, system: str, model: str | None = None) -> str:
         payload: dict[str, Any] = {
             "model": model or self.settings.ollama_model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
             "stream": False,
             "options": {"num_predict": self.settings.max_output_tokens},
         }
