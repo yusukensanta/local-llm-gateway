@@ -70,3 +70,22 @@ async def test_chat_rejects_empty_or_invalid_message(
     mock_ollama(lambda _request: httpx.Response(200, json=body))
     with pytest.raises(OllamaError, match="empty or invalid"):
         await OllamaClient(Settings()).chat("hello", system="test")
+
+
+async def test_chat_timeout_error_names_exception_type(mock_ollama: Install) -> None:
+    # httpx timeout exceptions stringify to "", so the type name must appear in the message.
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("", request=request)
+
+    mock_ollama(handler)
+    with pytest.raises(OllamaError, match=r"request failed: ReadTimeout"):
+        await OllamaClient(Settings()).chat("hello", system="test")
+
+
+async def test_chat_error_includes_type_and_detail(mock_ollama: Install) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    mock_ollama(handler)
+    with pytest.raises(OllamaError, match=r"request failed: ConnectError: refused"):
+        await OllamaClient(Settings()).chat("hello", system="test")

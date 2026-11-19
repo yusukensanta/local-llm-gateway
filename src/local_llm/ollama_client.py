@@ -39,7 +39,9 @@ class OllamaClient:
                 response = await client.post("/api/chat", json=payload)
                 response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise OllamaError(f"Ollama request failed: {exc}") from exc
+            # Some httpx errors (e.g. ReadTimeout) have an empty message; always name the type.
+            detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            raise OllamaError(f"Ollama request failed: {detail}") from exc
         content = response.json().get("message", {}).get("content")
         if not isinstance(content, str) or not content.strip():
             raise OllamaError("Ollama returned an empty or invalid message")
