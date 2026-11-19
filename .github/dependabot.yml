@@ -1,4 +1,12 @@
 version: 2
+
+registries:
+  # docker.litellm.ai fronts ghcr.io and allows anonymous pulls (anonymous token flow).
+  # Declaring it lets Dependabot reach the host; no credentials are configured.
+  litellm:
+    type: docker-registry
+    url: https://docker.litellm.ai
+
 updates:
   # Workflow actions are pinned to commit SHAs with a trailing "# vX" comment; Dependabot
   # bumps the SHA and rewrites the comment.
@@ -22,5 +30,7 @@ updates:
   # LiteLLM image in docker-compose.yml (tag pinned by digest).
   - package-ecosystem: docker-compose
     directory: /
+    registries:
+      - litellm
     schedule:
       interval: weekly
