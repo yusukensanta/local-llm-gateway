@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -x "$ROOT/.venv/bin/python" ]] || { echo "Run scripts/setup.sh first." >&2; exit 1; }
+cd "$ROOT"
+exec .venv/bin/python -m local_llm.server
