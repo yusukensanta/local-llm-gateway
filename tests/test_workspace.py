@@ -1,8 +1,14 @@
 from pathlib import Path
+
 import pytest
 
 from local_llm.config import Settings
-from local_llm.security.workspace import WorkspaceError, collect_text_files, read_file, resolve_allowed_path
+from local_llm.security.workspace import (
+    WorkspaceError,
+    collect_text_files,
+    read_file,
+    resolve_allowed_path,
+)
 
 
 def test_resolve_path_inside_workspace(tmp_path: Path) -> None:
