@@ -2,11 +2,15 @@
 
 from local_llm.config import Settings
 from local_llm.ollama_client import ChatClient
-from local_llm.tools.common import bounded_text, load_source, with_rules
+from local_llm.tools.common import bounded_text, fence_untrusted, load_source, with_rules
+
+MAX_QUESTION_CHARS = 4_000
 
 
 async def analyze(path: str, question: str, settings: Settings, client: ChatClient) -> str:
-    source = bounded_text(load_source(path, settings))
+    if len(question) > MAX_QUESTION_CHARS:
+        raise ValueError(f"question exceeds {MAX_QUESTION_CHARS} characters")
+    source = fence_untrusted(bounded_text(load_source(path, settings)))
     return await client.chat(
         f"Question: {question}\n\nSource files:\n{source}",
         system=with_rules(

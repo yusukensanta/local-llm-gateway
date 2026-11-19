@@ -1,6 +1,7 @@
 services:
   litellm:
-    image: docker.litellm.ai/berriai/litellm:main-stable
+    # Pinned by digest of main-stable (resolved 2026-11-19); refresh with: docker manifest inspect -v <image>:main-stable
+    image: docker.litellm.ai/berriai/litellm:main-stable@sha256:22efdbc54e448943de8c70114f51338e42742be1f139b83de13899f97cf5fa8c
     profiles: ["gateway"]
     command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
     ports:

@@ -143,7 +143,8 @@ def test_register_is_user_scoped_and_idempotent(
     workspace.mkdir()
     result = run("register-mcp.sh", str(workspace), env=env)
     assert result.returncode == 0, result.stderr
-    first, second = log.read_text().splitlines()
+    probe, first, second = log.read_text().splitlines()
+    assert probe == "claude plugin list"
     assert first == "claude mcp remove local-llm --scope user"
     assert second.startswith("claude mcp add local-llm --scope user --env LOCAL_LLM_WORKSPACE=")
     assert str(workspace.resolve()) in second
@@ -188,7 +189,7 @@ def test_register_passes_model_when_given(
     workspace.mkdir()
     result = run("register-mcp.sh", "--model", "qwen3:4b", str(workspace), env=env)
     assert result.returncode == 0, result.stderr
-    add = log.read_text().splitlines()[1]
+    add = next(c for c in log.read_text().splitlines() if c.startswith("claude mcp add"))
     assert "--env OLLAMA_MODEL=qwen3:4b" in add
     assert f"--env LOCAL_LLM_WORKSPACE={workspace.resolve()}" in add
 
@@ -237,3 +238,47 @@ def test_install_models_api_fallback_reports_ollama_error(
     result = run("install-models.sh", "nope:1", env=env)
     assert result.returncode == 1
     assert "file does not exist" in result.stderr
+
+
+PLUGIN_LISTING = 'if [ "$1 $2" = "plugin list" ]; then echo "  local-llm@local-llm-gateway"; fi'
+
+
+def test_register_refuses_when_plugin_is_installed(
+    sandbox: tuple[Path, Path, dict[str, str]], tmp_path: Path
+) -> None:
+    bin_dir, log, env = sandbox
+    make_fake(bin_dir, "claude", PLUGIN_LISTING)
+    fake_venv_python(tmp_path)
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    result = run("register-mcp.sh", str(workspace), env=env)
+    assert result.returncode == 1
+    assert "--force" in result.stderr
+    assert "local-llm@local-llm-gateway" in result.stderr
+    assert log.read_text().splitlines() == ["claude plugin list"]
+
+
+def test_register_force_overrides_plugin_check(
+    sandbox: tuple[Path, Path, dict[str, str]], tmp_path: Path
+) -> None:
+    bin_dir, log, env = sandbox
+    make_fake(bin_dir, "claude", PLUGIN_LISTING)
+    fake_venv_python(tmp_path)
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    result = run("register-mcp.sh", "--force", str(workspace), env=env)
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text().splitlines()
+    assert not any(c.startswith("claude plugin") for c in calls)
+    assert any(c.startswith("claude mcp add local-llm") for c in calls)
+
+
+def test_register_tolerates_cli_without_plugin_command(
+    sandbox: tuple[Path, Path, dict[str, str]], tmp_path: Path
+) -> None:
+    bin_dir, _, env = sandbox
+    make_fake(bin_dir, "claude", 'if [ "$1" = "plugin" ]; then exit 1; fi')
+    fake_venv_python(tmp_path)
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    assert run("register-mcp.sh", str(workspace), env=env).returncode == 0

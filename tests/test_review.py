@@ -91,3 +91,82 @@ async def test_review_prompt_demands_final_answer_only(repo: Path, stub_client: 
     (repo / "a.py").write_text("x = 5\n", encoding="utf-8")
     await review_diff(Settings(workspace=repo), stub_client)
     assert OUTPUT_RULES in stub_client.calls[0][1]
+
+
+async def test_diff_excludes_every_sensitive_pattern(repo: Path, stub_client: StubClient) -> None:
+    from local_llm.security.workspace import is_sensitive
+
+    names = [
+        "x.pfx",
+        "id_ecdsa",
+        ".npmrc",
+        "credentials.json",
+        "prod.env",
+        ".SSH/config",
+        "a.tfvars",
+    ]
+    for name in names:
+        assert is_sensitive(Path(name)), name
+        target = repo / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("v1\n", encoding="utf-8")
+    git(repo, "add", "-A", "-f")
+    git(repo, "commit", "-qm", "secrets")
+    for name in names:
+        (repo / name).write_text("LEAKED\n", encoding="utf-8")
+    (repo / "a.py").write_text("x = 7\n", encoding="utf-8")
+    await review_diff(Settings(workspace=repo), stub_client)
+    prompt = stub_client.calls[0][0]
+    assert "LEAKED" not in prompt
+    assert "+x = 7" in prompt
+
+
+async def test_review_prompt_fences_diff(repo: Path, stub_client: StubClient) -> None:
+    from local_llm.tools.common import INJECTION_GUARD, UNTRUSTED_TAG
+
+    (repo / "a.py").write_text("x = 8\n", encoding="utf-8")
+    await review_diff(Settings(workspace=repo), stub_client)
+    prompt, system = stub_client.calls[0]
+    assert f"<{UNTRUSTED_TAG}>" in prompt
+    assert INJECTION_GUARD in system
+
+
+async def test_git_failure_does_not_leak_details(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stub_client: StubClient
+) -> None:
+    def fail(*_a: object, **_k: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess([], 128, "", f"fatal: not a repo: {tmp_path}/secret")
+
+    monkeypatch.setattr(review.subprocess, "run", fail)
+    result = await review_diff(Settings(workspace=tmp_path), stub_client)
+    assert result.startswith("git diff failed (exit code 128")
+    assert str(tmp_path) not in result
+
+
+async def test_os_error_does_not_leak_details(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stub_client: StubClient
+) -> None:
+    def boom(*_a: object, **_k: object) -> None:
+        raise OSError(f"cannot exec in {tmp_path}/private")
+
+    monkeypatch.setattr(review.subprocess, "run", boom)
+    result = await review_diff(Settings(workspace=tmp_path), stub_client)
+    assert result.startswith("Unable to run git diff")
+    assert str(tmp_path) not in result
+
+
+def test_git_diff_disables_textconv_and_ext_diff() -> None:
+    captured: list[list[str]] = []
+
+    def fake_run(argv: list[str], **_k: object) -> subprocess.CompletedProcess[str]:
+        captured.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    original = review.subprocess.run
+    review.subprocess.run = fake_run  # ty: ignore[invalid-assignment]
+    try:
+        review._run_git_diff(Settings(workspace=Path.cwd()))
+    finally:
+        review.subprocess.run = original
+    assert "--no-textconv" in captured[0]
+    assert "--no-ext-diff" in captured[0]

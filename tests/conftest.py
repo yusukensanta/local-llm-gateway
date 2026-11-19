@@ -55,6 +55,8 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LOCAL_LLM_MAX_FILES",
         "LOCAL_LLM_REQUEST_TIMEOUT",
         "LOCAL_LLM_MAX_OUTPUT_TOKENS",
+        "LOCAL_LLM_ALLOW_REMOTE_OLLAMA",
+        "LOCAL_LLM_THINK",
     ):
         monkeypatch.delenv(name, raising=False)
 
