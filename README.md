@@ -1,43 +1,158 @@
 # Local LLM Gateway
 
-Cross-platform (Windows, Linux, WSL) read-only MCP tools for Claude Code to delegate selected coding analysis to local Ollama models.
+**Local Ollama models as read-only coding assistants for Claude Code.**
 
-## Runtime requirement
+Local LLM Gateway exposes a small set of MCP tools that let Claude Code delegate bounded code-analysis tasks to an Ollama model running on your machine (or another endpoint you configure).
 
-Python **3.14.x only**. The package metadata and setup scripts reject other Python versions, and CI tests only Python 3.14.
+Use Claude Code for orchestration and decision-making, and use the local model for focused, lower-cost work such as source summarization, code analysis, diff review, and test-case suggestions.
 
-## Authentication boundary
+> **Status:** Early-stage project. Review the limitations below and verify model-generated suggestions before relying on them.
 
-Claude Code keeps its normal direct Anthropic login. This project does not extract or proxy Claude Code subscription OAuth credentials through LiteLLM. The MCP server calls Ollama independently. The optional LiteLLM profile is for Ollama and providers using separately provisioned API keys.
+## Why this project?
+
+Claude Code is useful as the primary coding agent, but sending every analysis task to a hosted model can consume tokens quickly. This project adds a separate local inference path without replacing Claude Code's normal authentication or workflow.
+
+- Keep Claude Code connected directly to Anthropic using its supported login.
+- Delegate selected tasks to Ollama through MCP.
+- Keep the integration read-only: the tools do not edit source files or execute generated tests.
+- Bound workspace access and input size to reduce accidental over-reading.
+
+## How it works
+
+```text
+You
+ |
+ v
+Claude Code  ---------------------->  Anthropic
+ |
+ | MCP (stdio)
+ v
+Local LLM Gateway
+ |
+ | validated workspace files / Git diff
+ v
+Ollama
+ |
+ | analysis result
+ v
+Local LLM Gateway  ---------------->  Claude Code
+```
+
+Claude Code remains the primary agent. It decides when to call an MCP tool, receives the result, and can use that result in its wider reasoning.
+
+The MCP server reads files inside the configured workspace, applies input limits, and sends the selected text to the configured Ollama endpoint. If Ollama runs locally, inference is performed on your machine. If you point `OLLAMA_BASE_URL` at a remote host, the source text is sent to that host.
+
+### Authentication boundary
+
+Claude Code uses its normal direct Anthropic login. This project does **not** extract, store, or proxy Claude Code subscription OAuth credentials through LiteLLM.
+
+The optional LiteLLM configuration is an independent gateway for Ollama and providers configured with separately provisioned API credentials. It is not required for the MCP integration.
+
+## Features
+
+| MCP tool | Purpose | Behavior |
+| --- | --- | --- |
+| `local_analyze(path, question)` | Analyze source code against a specific question | Reads a file or directory within the workspace |
+| `local_summarize(path)` | Summarize source code | Summarizes purpose, symbols, dependencies, and uncertainties |
+| `local_review_diff()` | Review current unstaged Git changes | Reviews the output of `git diff` in the configured workspace |
+| `local_generate_tests(path)` | Suggest tests for source code | Returns test ideas and edge cases; does not create test files |
+
+All tools are read-only. In particular, `local_review_diff` currently reviews **unstaged tracked changes**; staged changes and untracked files are not included.
+
+## Requirements
+
+- Windows, Linux, or WSL
+- **Python 3.14.x** (the project intentionally rejects other Python versions)
+- [Git](https://git-scm.com/)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
+- [Ollama](https://ollama.com/)
+
+The default model is `qwen2.5-coder:7b`. Model quality and inference speed depend on your hardware. A GPU with 6 GB VRAM may not fit the entire model; Ollama can use CPU/RAM offload, which may reduce generation speed.
 
 ## Quick start
 
-Windows PowerShell:
+Run these commands from the repository root.
+
+### Windows (PowerShell)
+
 ```powershell
+# Create the virtual environment and install the project
 .\scripts\setup.ps1
+
+# Download the default Ollama model
 .\scripts\install-models.ps1
+
+# Register the MCP server for the current project workspace
 .\scripts\register-mcp.ps1 -Workspace (Get-Location).Path
 ```
 
-Linux / WSL:
+### Linux / WSL (Bash)
+
 ```bash
+# Create the virtual environment and install the project
 bash scripts/setup.sh
+
+# Download the default Ollama model
 bash scripts/install-models.sh
+
+# Register the MCP server for the current project workspace
 bash scripts/register-mcp.sh "$PWD"
 ```
 
-If Ollama runs on Windows and Claude Code in WSL, set `OLLAMA_BASE_URL` to the Windows host IP. See [Linux/WSL setup](docs/setup-linux-wsl.md).
+After registration, restart Claude Code (or start a new session) and run:
 
-## Tools
+```text
+/mcp
+```
 
-- `local_analyze(path, question)`
-- `local_summarize(path)`
-- `local_review_diff()`
-- `local_generate_tests(path)`
+Confirm that `local-llm` is listed and its tools are available.
 
-All tools are read-only. Paths must resolve inside `LOCAL_LLM_WORKSPACE`; file count and size are bounded. Treat model output as untrusted and verify it.
+### WSL with Ollama running on Windows
 
-## Tests
+When Claude Code runs inside WSL but Ollama runs on Windows, the default `localhost` URL may not reach the Windows Ollama service. Set the Windows host address in the shell **before launching Claude Code**:
+
+```bash
+export OLLAMA_BASE_URL="http://$(ip route show default | awk '{print $3}'):11434"
+curl -fsS "$OLLAMA_BASE_URL/api/tags"
+claude
+```
+
+If Ollama runs inside the same WSL environment, the default `http://localhost:11434` endpoint is normally sufficient. Do not expose the Ollama API publicly; restrict network access appropriately.
+
+More detailed guides:
+- [Windows setup](docs/setup-windows.md)
+- [Linux / WSL setup](docs/setup-linux-wsl.md)
+
+## Configuration
+
+The MCP server reads the following environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Model name available in Ollama |
+| `LOCAL_LLM_WORKSPACE` | Current working directory | Allowed workspace root |
+| `LOCAL_LLM_MAX_FILE_BYTES` | `200000` | Maximum size of an individual file, in bytes |
+| `LOCAL_LLM_MAX_FILES` | `20` | Maximum number of files collected (maximum configurable value: 100) |
+| `LOCAL_LLM_REQUEST_TIMEOUT` | `180` | Ollama request timeout, in seconds (maximum: 900) |
+| `LOCAL_LLM_MAX_OUTPUT_TOKENS` | `1200` | Maximum generated output tokens (maximum: 8192) |
+
+The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you provide. Other variables can be set in the environment inherited by Claude Code before it starts.
+
+## Model selection and performance
+
+The default model is a starting point, not a universal recommendation.
+
+- Start with the default `qwen2.5-coder:7b` model.
+- Check model placement and resource usage with `ollama ps` and `nvidia-smi`.
+- If inference is slow or memory is constrained, try a smaller model or reduce the amount of source text sent for a task.
+- Evaluate models using representative tasks from your own repositories; compare correctness and usefulness, not just generation speed.
+
+See [model selection notes](docs/model-selection.md).
+
+## Development
+
+Python 3.14.x is required.
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -46,8 +161,44 @@ python -m mypy src
 python -m pytest -q
 ```
 
-GitHub Actions validates Python 3.14 on Ubuntu and Windows, PowerShell/Bash scripts, Pester tests and Docker Compose configuration.
+GitHub Actions checks the Python 3.14 environment on Ubuntu and Windows, validates the shell and PowerShell scripts, runs the Pester script tests, and validates the optional Docker Compose configuration.
 
-## Optional LiteLLM
+## Optional: LiteLLM
 
-LiteLLM is an independent optional gateway for Ollama and providers using separately provisioned API credentials; it does not proxy Claude Code subscription OAuth. Copy `.env.example` to `.env`, set `LITELLM_MASTER_KEY`, then run `docker compose --profile gateway up -d`. The proxy binds to loopback port 4000.
+LiteLLM is not needed for Claude Code to call the local MCP tools.
+
+To run the optional gateway:
+
+1. Copy `.env.example` to `.env`.
+2. Set a strong `LITELLM_MASTER_KEY`.
+3. Configure any provider credentials you intend to use.
+4. Start the gateway:
+
+```bash
+docker compose --profile gateway up -d
+```
+
+The proxy is configured to bind to loopback on port `4000`. Treat the master key and provider credentials as secrets; do not commit your real `.env` file.
+
+## Security and limitations
+
+- **Workspace boundary:** requested paths must resolve inside `LOCAL_LLM_WORKSPACE`.
+- **Bounded input:** file count, individual file size, and prompt/output sizes are limited.
+- **Read-only tools:** the MCP tools do not write files, apply patches, or run shell commands.
+- **Untrusted output:** local model responses can be incorrect, incomplete, or misleading. Verify claims against source code and run tests independently.
+- **Data handling:** source text is sent to the configured Ollama endpoint. Use a trusted endpoint and do not assume data stays on the local machine when using a remote URL.
+- **Not a replacement for review:** model-generated analysis is advisory and is not a substitute for tests, static analysis, or human review.
+
+## Troubleshooting
+
+- **Connection refused:** confirm Ollama is running and that `OLLAMA_BASE_URL` is reachable.
+- **WSL cannot reach Windows Ollama:** use the Windows host address described above and check Windows Firewall rules.
+- **MCP server does not appear:** restart Claude Code, inspect `/mcp`, and verify that the registered Python executable exists.
+- **File access is denied:** register the server with the intended workspace root.
+- **Inference is slow:** inspect `ollama ps`, available RAM/VRAM, model size, and input length.
+
+See the [troubleshooting guide](docs/troubleshooting.md) for additional notes.
+
+## License
+
+[MIT](LICENSE)
