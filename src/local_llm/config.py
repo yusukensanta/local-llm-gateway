@@ -1,9 +1,13 @@
 """Runtime settings."""
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if sys.version_info[:2] != (3, 14):
+    raise RuntimeError(f"Python 3.14.x is required; found {sys.version.split()[0]}")
 
 
 class Settings(BaseSettings):
