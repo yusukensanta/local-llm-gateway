@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,24 +22,35 @@ async def test_tools_are_described() -> None:
         assert tool.description.strip()
 
 
-async def test_tools_delegate_to_ollama(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stub_client: StubClient
+@pytest.fixture
+def repo_with_unstaged_change(tmp_path: Path) -> Path:
+    git = str(shutil.which("git"))
+    source = tmp_path / "m.py"
+    source.write_text("print('hi')\n", encoding="utf-8")
+    # Stage the file, then edit it: `git diff` (unstaged) is non-empty without needing a commit.
+    subprocess.run([git, "-C", str(tmp_path), "init", "-q"], check=True, capture_output=True)
+    subprocess.run([git, "-C", str(tmp_path), "add", "m.py"], check=True, capture_output=True)
+    source.write_text("print('changed')\n", encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git is required")
+async def test_tools_delegate_to_client(
+    monkeypatch: pytest.MonkeyPatch, repo_with_unstaged_change: Path, stub_client: StubClient
 ) -> None:
-    (tmp_path / "m.py").write_text("print('hi')", encoding="utf-8")
+    tmp_path = repo_with_unstaged_change
     monkeypatch.setattr(server, "settings", Settings(workspace=tmp_path))
     monkeypatch.setattr(server, "client", stub_client)
+
     assert await server.local_analyze("m.py", "what?") == "stub"
     assert await server.local_summarize("m.py") == "stub"
     assert await server.local_generate_tests("m.py") == "stub"
-    assert (
-        await server.local_review_diff()
-        in {"stub"}
-        | {
-            "No unstaged Git diff found.",
-        }
-        or True
-    )
-    assert len(stub_client.calls) >= 3
+    assert await server.local_review_diff() == "stub"
+
+    assert len(stub_client.calls) == 4
+    assert "what?" in stub_client.calls[0][0]
+    assert all("print(" in prompt for prompt, _ in stub_client.calls)
+    assert "print('changed')" in stub_client.calls[3][0]
 
 
 def test_main_runs_stdio_transport(monkeypatch: pytest.MonkeyPatch) -> None:
