@@ -2,6 +2,10 @@
 
 Cross-platform (Windows, Linux, WSL) read-only MCP tools for Claude Code to delegate selected coding analysis to local Ollama models.
 
+## Runtime requirement
+
+Python **3.14.x only**. The package metadata and setup scripts reject other Python versions, and CI tests only Python 3.14.
+
 ## Authentication boundary
 
 Claude Code keeps its normal direct Anthropic login. This project does not extract or proxy Claude Code subscription OAuth credentials through LiteLLM. The MCP server calls Ollama independently. The optional LiteLLM profile is for Ollama and providers using separately provisioned API keys.
@@ -42,7 +46,7 @@ python -m mypy src
 python -m pytest -q
 ```
 
-GitHub Actions validates Python on Ubuntu and Windows, PowerShell/Bash scripts, Pester tests and Docker Compose configuration.
+GitHub Actions validates Python 3.14 on Ubuntu and Windows, PowerShell/Bash scripts, Pester tests and Docker Compose configuration.
 
 ## Optional LiteLLM
 
