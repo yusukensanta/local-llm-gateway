@@ -5,7 +5,7 @@ import pytest
 from local_llm.config import Settings
 from local_llm.security.workspace import WorkspaceError
 from local_llm.tools.analyze import analyze
-from local_llm.tools.common import bounded_text, load_source
+from local_llm.tools.common import OUTPUT_RULES, bounded_text, load_source
 from local_llm.tools.generate_tests import generate_tests
 from local_llm.tools.summarize import summarize
 from tests.conftest import StubClient
@@ -54,3 +54,23 @@ def test_load_source_reads_directory(tmp_path: Path) -> None:
 def test_bounded_text_truncates() -> None:
     assert bounded_text("abc", max_chars=3) == "abc"
     assert bounded_text("abcd", max_chars=3) == "abc\n[TRUNCATED]"
+
+
+async def test_every_tool_demands_final_answer_only(
+    tmp_path: Path, stub_client: StubClient
+) -> None:
+    """Small reasoning models otherwise narrate their plan and run out of tokens."""
+    (tmp_path / "a.py").write_text("x = 1", encoding="utf-8")
+    settings = Settings(workspace=tmp_path)
+    await analyze("a.py", "q", settings, stub_client)
+    await summarize("a.py", settings, stub_client)
+    await generate_tests("a.py", settings, stub_client)
+    systems = [system for _, system in stub_client.calls]
+    assert len(systems) == 3
+    assert all(OUTPUT_RULES in system for system in systems)
+
+
+def test_output_rules_forbid_preamble() -> None:
+    lowered = OUTPUT_RULES.lower()
+    assert "final answer only" in lowered
+    assert "do not" in lowered

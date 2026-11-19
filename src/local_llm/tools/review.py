@@ -6,7 +6,7 @@ import subprocess
 
 from local_llm.config import Settings
 from local_llm.ollama_client import ChatClient
-from local_llm.tools.common import bounded_text
+from local_llm.tools.common import bounded_text, with_rules
 
 GIT_TIMEOUT_SECONDS = 15
 # Keep likely secrets out of the diff even when they are tracked.
@@ -58,5 +58,5 @@ async def review_diff(settings: Settings, client: ChatClient) -> str:
     return await client.chat(
         "Review this diff for actionable bugs, regressions, security concerns and missing tests. "
         "Cite file/hunk. Do not claim tests were run.\n\n" + bounded_text(result.stdout),
-        system="You are a conservative code reviewer.",
+        system=with_rules("You are a conservative code reviewer."),
     )

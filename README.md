@@ -100,11 +100,11 @@ bash scripts/install-models.sh
 bash scripts/register-mcp.sh "$PWD"
 
 # Or pick the model explicitly (it must already be pulled in Ollama)
-bash scripts/install-models.sh qwen3:4b
-bash scripts/register-mcp.sh --model qwen3:4b "$PWD"
+bash scripts/install-models.sh qwen3:4b-instruct
+bash scripts/register-mcp.sh --model qwen3:4b-instruct "$PWD"
 ```
 
-`install-models.sh` falls back to the Ollama HTTP API (`OLLAMA_BASE_URL`) when the `ollama` CLI is not installed, which is the normal case in WSL with Ollama on Windows. On Windows use `.\scripts\register-mcp.ps1 -Model qwen3:4b`.
+`install-models.sh` falls back to the Ollama HTTP API (`OLLAMA_BASE_URL`) when the `ollama` CLI is not installed, which is the normal case in WSL with Ollama on Windows. On Windows use `.\scripts\register-mcp.ps1 -Model qwen3:4b-instruct`.
 
 After registration, restart Claude Code (or start a new session) and run:
 
@@ -151,7 +151,7 @@ The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you pro
 
 The default model is a starting point, not a universal recommendation.
 
-- Start with the default `qwen2.5-coder:7b` model, or `--model qwen3:4b` for a faster option that fits fully in 6 GB of VRAM (measured on a GTX 1660 SUPER: about 70 tok/s versus about 13 tok/s for the 7B model, which partly spills to CPU).
+- Start with the default `qwen2.5-coder:7b` model, or `--model qwen3:4b-instruct` for a faster option that fits fully in 6 GB of VRAM (measured on a GTX 1660 SUPER: about 70 tok/s versus about 13 tok/s for the 7B model, which partly spills to CPU). Avoid the plain `qwen3:4b` tag for these tools: it is a thinking model and writes its reasoning draft into the answer even with `LOCAL_LLM_THINK=false`.
 - Check model placement and resource usage with `ollama ps` and `nvidia-smi`.
 - If inference is slow or memory is constrained, try a smaller model or reduce the amount of source text sent for a task.
 - Evaluate models using representative tasks from your own repositories; compare correctness and usefulness, not just generation speed.

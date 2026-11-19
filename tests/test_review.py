@@ -6,6 +6,7 @@ import pytest
 
 from local_llm.config import Settings
 from local_llm.tools import review
+from local_llm.tools.common import OUTPUT_RULES
 from local_llm.tools.review import review_diff
 from tests.conftest import StubClient
 
@@ -84,3 +85,9 @@ async def test_git_timeout(
     monkeypatch.setattr(review.subprocess, "run", boom)
     result = await review_diff(Settings(workspace=tmp_path), stub_client)
     assert result.startswith("Unable to run git diff")
+
+
+async def test_review_prompt_demands_final_answer_only(repo: Path, stub_client: StubClient) -> None:
+    (repo / "a.py").write_text("x = 5\n", encoding="utf-8")
+    await review_diff(Settings(workspace=repo), stub_client)
+    assert OUTPUT_RULES in stub_client.calls[0][1]
