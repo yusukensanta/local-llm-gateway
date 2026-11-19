@@ -19,7 +19,9 @@ async def test_chat_payload_and_response(mock_ollama: Install) -> None:
         return httpx.Response(200, json={"message": {"content": "ok"}})
 
     mock_ollama(handler)
-    settings = Settings(ollama_base_url="http://unit.test/", max_output_tokens=77)
+    settings = Settings(
+        ollama_base_url="http://unit.test/", allow_remote_ollama=True, max_output_tokens=77
+    )
     assert await OllamaClient(settings).chat("hello", system="sys") == "ok"
     assert seen["url"] == "http://unit.test/api/chat"
     payload = seen["payload"]

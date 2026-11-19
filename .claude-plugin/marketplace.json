@@ -1,0 +1,14 @@
+{
+  "name": "local-llm-gateway",
+  "description": "Read-only MCP tools that offload code analysis to a local Ollama model",
+  "owner": {
+    "name": "yusukensanta"
+  },
+  "plugins": [
+    {
+      "name": "local-llm",
+      "source": "./",
+      "description": "Read-only MCP tools (analyze, summarize, review diff, suggest tests) backed by a local Ollama model"
+    }
+  ]
+}

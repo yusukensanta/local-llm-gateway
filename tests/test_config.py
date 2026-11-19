@@ -16,12 +16,12 @@ def test_defaults() -> None:
 
 
 def test_environment_aliases(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://example.test:1")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://192.168.1.5:1")
     monkeypatch.setenv("OLLAMA_MODEL", "tiny")
     monkeypatch.setenv("LOCAL_LLM_WORKSPACE", str(tmp_path))
     monkeypatch.setenv("LOCAL_LLM_MAX_FILES", "3")
     s = Settings()
-    assert (s.ollama_base_url, s.ollama_model, s.max_files) == ("http://example.test:1", "tiny", 3)
+    assert (s.ollama_base_url, s.ollama_model, s.max_files) == ("http://192.168.1.5:1", "tiny", 3)
     assert s.resolved_workspace == tmp_path.resolve()
 
 
@@ -72,3 +72,86 @@ def test_think_flag_from_environment(
 ) -> None:
     monkeypatch.setenv("LOCAL_LLM_THINK", raw)
     assert Settings().think is expected
+
+
+def _fake_home(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: home))
+
+
+def test_workspace_equal_to_home_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _fake_home(monkeypatch, tmp_path)
+    with pytest.raises(ValidationError, match="too broad"):
+        Settings(workspace=tmp_path)
+
+
+def test_workspace_parent_of_home_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    home = tmp_path / "users" / "me"
+    home.mkdir(parents=True)
+    _fake_home(monkeypatch, home)
+    with pytest.raises(ValidationError, match="too broad"):
+        Settings(workspace=tmp_path)
+
+
+def test_default_cwd_workspace_is_checked(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The default (``Path.cwd()``) is not validated by pydantic; the model validator must be."""
+    _fake_home(monkeypatch, tmp_path)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValidationError, match="too broad"):
+        Settings()
+
+
+def test_workspace_below_home_is_allowed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    _fake_home(monkeypatch, tmp_path)
+    assert Settings(workspace=project).resolved_workspace == project.resolve()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:11434",
+        "http://127.0.0.1:11434",
+        "http://[::1]:11434",
+        "http://172.24.0.1:11434",
+        "http://192.168.0.10:11434",
+        "http://169.254.1.1:11434",
+        "http://host.docker.internal:11434",
+        "https://LOCALHOST",
+    ],
+)
+def test_local_and_private_ollama_urls_are_accepted(url: str) -> None:
+    assert Settings(ollama_base_url=url).ollama_base_url == url
+
+
+@pytest.mark.parametrize(
+    "url", ["http://example.test:11434", "https://8.8.8.8", "http://ollama.internal.corp"]
+)
+def test_remote_ollama_url_requires_opt_in(url: str) -> None:
+    with pytest.raises(ValidationError, match="LOCAL_LLM_ALLOW_REMOTE_OLLAMA"):
+        Settings(ollama_base_url=url)
+    assert Settings(ollama_base_url=url, allow_remote_ollama=True).ollama_base_url == url
+
+
+def test_remote_opt_in_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://ollama.example.test")
+    monkeypatch.setenv("LOCAL_LLM_ALLOW_REMOTE_OLLAMA", "true")
+    assert Settings().allow_remote_ollama is True
+
+
+@pytest.mark.parametrize(
+    ("url", "message"),
+    [
+        ("ftp://localhost", "http"),
+        ("localhost:11434", "http"),
+        ("http://", "http"),
+        ("http://user:pw@localhost:11434", "credentials"),
+    ],
+)
+def test_malformed_ollama_urls_are_rejected(url: str, message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        Settings(ollama_base_url=url, allow_remote_ollama=True)

@@ -28,6 +28,13 @@ Describe "PowerShell scripts" {
     It "MCP registration is user scoped" {
         Get-ScriptText "register-mcp.ps1" | Should -Match "--scope user"
     }
+
+    It "MCP registration refuses to duplicate the installed plugin unless -Force" {
+        $text = Get-ScriptText "register-mcp.ps1"
+        $text | Should -Match "local-llm@local-llm-gateway"
+        $text | Should -Match "plugin list"
+        $text | Should -Match '\[switch\]\$Force'
+    }
 }
 
 Describe "Script behaviour" {

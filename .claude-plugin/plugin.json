@@ -1,0 +1,26 @@
+{
+  "name": "local-llm",
+  "displayName": "Local LLM Gateway",
+  "version": "0.1.0",
+  "description": "Read-only MCP tools (analyze, summarize, review diff, suggest tests) backed by a local Ollama model",
+  "author": {
+    "name": "yusukensanta"
+  },
+  "repository": "https://github.com/yusukensanta/local-llm-gateway",
+  "license": "MIT",
+  "keywords": ["mcp", "ollama", "local-llm", "code-review"],
+  "userConfig": {
+    "ollama_model": {
+      "type": "string",
+      "title": "Ollama model",
+      "description": "Model name available in your Ollama install (for example qwen2.5-coder:7b or qwen3:4b-instruct)",
+      "default": "qwen2.5-coder:7b"
+    },
+    "ollama_base_url": {
+      "type": "string",
+      "title": "Ollama URL",
+      "description": "Ollama API endpoint. Must be local or on a private network; source text is sent to it",
+      "default": "http://localhost:11434"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "local-llm": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--locked",
+        "--no-dev",
+        "--project",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "local-llm-mcp"
+      ],
+      "env": {
+        "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv",
+        "LOCAL_LLM_WORKSPACE": "${CLAUDE_PROJECT_DIR}",
+        "OLLAMA_MODEL": "${user_config.ollama_model}",
+        "OLLAMA_BASE_URL": "${user_config.ollama_base_url}"
+      }
+    }
+  }
+}

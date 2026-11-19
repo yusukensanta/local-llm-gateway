@@ -1,8 +1,11 @@
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from local_llm.config import Settings
+from local_llm.security import workspace
 from local_llm.security.workspace import (
     WorkspaceError,
     collect_text_files,
@@ -166,3 +169,88 @@ def test_collection_single_file(tmp_path: Path) -> None:
 def test_collection_without_readable_files_raises(tmp_path: Path) -> None:
     with pytest.raises(WorkspaceError, match="No readable"):
         collect_text_files(tmp_path, Settings(workspace=tmp_path))
+
+
+@pytest.mark.parametrize(
+    "rel", [".git/config", "node_modules/x.js", ".venv/lib/a.py", ".ssh/known_hosts", ".SSH/x"]
+)
+def test_direct_path_into_ignored_or_sensitive_dir_is_blocked(tmp_path: Path, rel: str) -> None:
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("data", encoding="utf-8")
+    with pytest.raises(WorkspaceError, match="blocked"):
+        resolve_allowed_path(rel, Settings(workspace=tmp_path))
+
+
+def test_direct_ignored_directory_is_blocked(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    with pytest.raises(WorkspaceError, match=r"'\.git'"):
+        resolve_allowed_path(".git", Settings(workspace=tmp_path))
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "prod.env",
+        ".git-credentials",
+        ".pgpass",
+        "store.jks",
+        "app.keystore",
+        "terraform.tfstate",
+        "terraform.tfstate.backup",
+        "prod.tfvars",
+        "service-account-prod.json",
+        "vault.kdbx",
+        "id_dsa",
+        "key.ppk",
+        ".htpasswd",
+    ],
+)
+def test_extended_secret_patterns_are_sensitive(name: str) -> None:
+    assert is_sensitive(Path("conf") / name)
+
+
+def test_sensitive_dir_match_is_case_insensitive() -> None:
+    assert is_sensitive(Path(".SSH/config"))
+    assert is_sensitive(Path(".Docker/config.json"))
+
+
+def test_collection_skips_case_variant_sensitive_dir(tmp_path: Path) -> None:
+    for rel in (".AWS/credentials.txt", "ok.py"):
+        f = tmp_path / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("TOPSECRET" if "AWS" in rel else "ok", encoding="utf-8")
+    text = collect_text_files(tmp_path, Settings(workspace=tmp_path))
+    assert "TOPSECRET" not in text
+    assert "ok.py" in text
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="needs O_NOFOLLOW")
+def test_read_file_refuses_symlink_swapped_in_after_resolve(tmp_path: Path) -> None:
+    """TOCTOU: a path resolved earlier that is now a symlink must not be followed."""
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOPSECRET", encoding="utf-8")
+    link = tmp_path / "swapped.txt"
+    link.symlink_to(secret)
+    with pytest.raises(WorkspaceError, match="Cannot open"):
+        read_file(link, Settings(workspace=tmp_path))
+
+
+def test_read_file_rejects_non_regular_file_after_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "a.txt"
+    target.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(workspace, "stat", SimpleNamespace(S_ISREG=lambda _mode: False))
+    with pytest.raises(WorkspaceError, match="Not a regular file"):
+        read_file(target, Settings(workspace=tmp_path))
+
+
+def test_collection_stops_reading_once_prompt_budget_is_reached(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(workspace, "MAX_PROMPT_CHARS", 150)
+    for name in ("a.txt", "b.txt", "c.txt"):
+        (tmp_path / name).write_text("x" * 90, encoding="utf-8")
+    text = collect_text_files(tmp_path, Settings(workspace=tmp_path))
+    assert text.count("--- FILE:") == 2

@@ -130,6 +130,17 @@ More detailed guides:
 - [Windows setup](docs/setup-windows.md)
 - [Linux / WSL setup](docs/setup-linux-wsl.md)
 
+### Install as a Claude Code plugin
+
+This repository is also a Claude Code plugin marketplace. You need [`uv`](https://docs.astral.sh/uv/) and a running Ollama with the model pulled.
+
+```bash
+claude plugin marketplace add yusukensanta/local-llm-gateway
+claude plugin install local-llm@local-llm-gateway
+```
+
+Claude Code prompts for the Ollama model and URL when the plugin is enabled. The plugin runs `uv run --locked` from its own directory (Python 3.14 is fetched by `uv` if missing; the first start downloads dependencies, so it can be slow), keeps its virtual environment in the plugin data directory, and sets `LOCAL_LLM_WORKSPACE` to the current project. If you registered the server earlier with `register-mcp.sh`, remove it with `claude mcp remove local-llm --scope user` so the tools do not appear twice. In the other direction, `register-mcp.sh` / `register-mcp.ps1` refuse to register while the plugin is installed; pass `--force` / `-Force` to override.
+
 ## Configuration
 
 The MCP server reads the following environment variables:
@@ -143,6 +154,7 @@ The MCP server reads the following environment variables:
 | `LOCAL_LLM_MAX_FILES` | `20` | Maximum number of files collected (maximum configurable value: 100) |
 | `LOCAL_LLM_REQUEST_TIMEOUT` | `180` | Ollama request timeout, in seconds (maximum: 900) |
 | `LOCAL_LLM_MAX_OUTPUT_TOKENS` | `1200` | Maximum generated output tokens (maximum: 8192) |
+| `LOCAL_LLM_ALLOW_REMOTE_OLLAMA` | `false` | Allow `OLLAMA_BASE_URL` to point at a host that is not loopback or private. Source text is sent to that host, so enable it only for endpoints you trust |
 | `LOCAL_LLM_THINK` | `false` | Let reasoning models (for example `qwen3`) think before answering. Thinking consumes output tokens, so keep it off unless you raise the token limit |
 
 The registration scripts set `LOCAL_LLM_WORKSPACE` to the workspace path you provide. Other variables can be set in the environment inherited by Claude Code before it starts. The server does not read `.env` files; invalid values (for example `LOCAL_LLM_MAX_FILES=0`) fail at startup.
@@ -196,10 +208,13 @@ The proxy is configured to bind to loopback on port `4000`. Treat the master key
 
 ## Security and limitations
 
-- **Workspace boundary:** requested paths must resolve inside `LOCAL_LLM_WORKSPACE`; symlinks that point outside are skipped or refused.
-- **Secrets are never read:** `.env` / `.env.*` (except `.env.example`), private keys, `.ssh/`, `.aws/`, `.netrc` and similar files are blocked, and also excluded from `local_review_diff`.
-- **Bounded input:** file count, individual file size, and prompt/output sizes are limited.
+- **Workspace boundary:** requested paths must resolve inside `LOCAL_LLM_WORKSPACE`; symlinks that point outside are skipped or refused. Paths into `.git`, `.venv`, `node_modules` and similar directories are refused even when named directly. A workspace that is your home directory (or a parent of it) is rejected at startup; point it at a specific project.
+- **Secrets are never read:** `.env` / `.env.*` / `*.env` (except `.env.example`), private keys, keystores, Terraform state and variables, `.ssh/`, `.aws/`, `.docker/`, `.netrc`, `.git-credentials` and similar files are blocked (case-insensitively for directories), and also excluded from `local_review_diff` using the same list.
+- **Local endpoint by default:** `OLLAMA_BASE_URL` must be loopback or a private address unless `LOCAL_LLM_ALLOW_REMOTE_OLLAMA=true`; URLs with embedded credentials are rejected.
+- **Race-resistant reads:** files are opened with `O_NOFOLLOW` (POSIX) and checked to be regular files, so a path swapped for a symlink after validation is not followed. Directory components are not re-checked; this assumes no hostile local process writing to the workspace.
+- **Bounded input:** file count, individual file size, total prompt size (reading stops at the limit), the `question` length and output tokens are limited. Git and OS error details are logged, not returned to the caller.
 - **Read-only tools:** the MCP tools do not write files, apply patches, or run shell commands.
+- **Prompt injection:** file and diff contents are fenced as untrusted data and the system prompt tells the model not to follow instructions found there. This reduces the risk but cannot remove it.
 - **Untrusted output:** local model responses can be incorrect, incomplete, or misleading. Verify claims against source code and run tests independently.
 - **Data handling:** source text is sent to the configured Ollama endpoint. Use a trusted endpoint and do not assume data stays on the local machine when using a remote URL.
 - **Not a replacement for review:** model-generated analysis is advisory and is not a substitute for tests, static analysis, or human review.
