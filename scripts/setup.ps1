@@ -4,9 +4,9 @@ param([switch]$SkipVenv)
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw "Python 3.11+ is required." }
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw "Python 3.14 is required." }
 $Version = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-if ([version]$Version -lt [version]"3.11") { throw "Python 3.11+ required; found $Version." }
+if ($Version -ne "3.14") { throw "Python 3.14 required; found $Version." }
 if (-not $SkipVenv) {
     $VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
     if ($PSCmdlet.ShouldProcess($VenvPython, "Create virtual environment")) {
