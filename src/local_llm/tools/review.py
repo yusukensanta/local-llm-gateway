@@ -62,6 +62,6 @@ async def review_diff(settings: Settings, client: ChatClient) -> str:
     return await client.chat(
         "Review this diff for actionable bugs, regressions, security concerns and missing tests. "
         "Cite file/hunk. Do not claim tests were run.\n\n"
-        + fence_untrusted(bounded_text(result.stdout)),
+        + fence_untrusted(bounded_text(result.stdout, settings.prompt_char_budget)),
         system=with_rules("You are a conservative code reviewer."),
     )

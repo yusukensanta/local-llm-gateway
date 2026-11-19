@@ -13,8 +13,12 @@
       "env": {
         "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv",
         "LOCAL_LLM_WORKSPACE": "${CLAUDE_PROJECT_DIR}",
-        "OLLAMA_MODEL": "${user_config.ollama_model}",
-        "OLLAMA_BASE_URL": "${user_config.ollama_base_url}"
+        "OLLAMA_BASE_URL": "${user_config.ollama_base_url}",
+        "LOCAL_LLM_BACKEND": "${user_config.backend}",
+        "LOCAL_LLM_OPENAI_BASE_URL": "${user_config.openai_base_url}",
+        "LOCAL_LLM_API_KEY": "${user_config.api_key}",
+        "LOCAL_LLM_CONTEXT_TOKENS": "${user_config.context_tokens}",
+        "LOCAL_LLM_MODEL": "${user_config.model}"
       }
     }
   }

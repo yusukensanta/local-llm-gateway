@@ -5,9 +5,10 @@ from typing import Any, Protocol
 import httpx
 
 from local_llm.config import Settings
+from local_llm.errors import BackendError, error_detail
 
 
-class OllamaError(RuntimeError):
+class OllamaError(BackendError):
     """Ollama request failed."""
 
 
@@ -23,7 +24,7 @@ class OllamaClient:
 
     async def chat(self, prompt: str, *, system: str, model: str | None = None) -> str:
         payload: dict[str, Any] = {
-            "model": model or self.settings.ollama_model,
+            "model": model or self.settings.model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
@@ -31,7 +32,11 @@ class OllamaClient:
             "stream": False,
             # Reasoning models (e.g. qwen3) otherwise spend num_predict on hidden thinking.
             "think": self.settings.think,
-            "options": {"num_predict": self.settings.max_output_tokens},
+            "options": {
+                "num_predict": self.settings.max_output_tokens,
+                # Without this Ollama silently uses its VRAM-dependent default (4k on <24 GiB).
+                "num_ctx": self.settings.context_tokens,
+            },
         }
         try:
             async with httpx.AsyncClient(
@@ -41,8 +46,7 @@ class OllamaClient:
                 response = await client.post("/api/chat", json=payload)
                 response.raise_for_status()
         except httpx.HTTPError as exc:
-            # Some httpx errors (e.g. ReadTimeout) have an empty message; always name the type.
-            detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            detail = error_detail(exc)
             raise OllamaError(f"Ollama request failed: {detail}") from exc
         content = response.json().get("message", {}).get("content")
         if not isinstance(content, str) or not content.strip():

@@ -246,11 +246,10 @@ def test_read_file_rejects_non_regular_file_after_open(
         read_file(target, Settings(workspace=tmp_path))
 
 
-def test_collection_stops_reading_once_prompt_budget_is_reached(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(workspace, "MAX_PROMPT_CHARS", 150)
+def test_collection_stops_reading_once_prompt_budget_is_reached(tmp_path: Path) -> None:
+    settings = Settings(workspace=tmp_path, context_tokens=2048, max_output_tokens=1200)
+    assert settings.prompt_char_budget == 1044
     for name in ("a.txt", "b.txt", "c.txt"):
-        (tmp_path / name).write_text("x" * 90, encoding="utf-8")
-    text = collect_text_files(tmp_path, Settings(workspace=tmp_path))
+        (tmp_path / name).write_text("x" * 600, encoding="utf-8")
+    text = collect_text_files(tmp_path, settings)
     assert text.count("--- FILE:") == 2

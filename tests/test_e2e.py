@@ -12,13 +12,21 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 REQUESTS: list[dict[str, object]] = []
+SEEN: list[tuple[str, str | None]] = []  # (path, Authorization header)
 
 
 class FakeOllama(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         length = int(self.headers["Content-Length"])
         REQUESTS.append(json.loads(self.rfile.read(length)))
-        body = json.dumps({"message": {"content": "fake-review"}}).encode()
+        SEEN.append((self.path, self.headers.get("Authorization")))
+        # One body that satisfies both the Ollama and the OpenAI-compatible parsers.
+        body = json.dumps(
+            {
+                "message": {"content": "fake-review"},
+                "choices": [{"message": {"content": "fake-review"}}],
+            }
+        ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -33,6 +41,7 @@ class FakeOllama(BaseHTTPRequestHandler):
 @pytest.fixture
 def fake_ollama():
     REQUESTS.clear()
+    SEEN.clear()
     server = HTTPServer(("127.0.0.1", 0), FakeOllama)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -76,3 +85,29 @@ async def test_full_round_trip(fake_ollama: str, tmp_path: Path) -> None:
     prompts = json.dumps(REQUESTS)
     assert "def hello()" in prompts
     assert "TOPSECRET" not in prompts
+
+
+async def test_openai_backend_round_trip(fake_ollama: str, tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("def hello(): return 'world'\n", encoding="utf-8")
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "local_llm.server"],
+        env={
+            "LOCAL_LLM_BACKEND": "openai",
+            "LOCAL_LLM_OPENAI_BASE_URL": f"{fake_ollama}/v1",
+            "LOCAL_LLM_API_KEY": "sk-e2e",
+            "LOCAL_LLM_WORKSPACE": str(tmp_path),
+            "PATH": "/usr/bin:/bin",
+        },
+    )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        ok = await session.call_tool("local_analyze", {"path": "app.py", "question": "what?"})
+        assert not ok.is_error
+        assert "fake-review" in json.dumps([c.model_dump() for c in ok.content])
+
+    assert SEEN == [("/v1/chat/completions", "Bearer sk-e2e")]
+    payload = REQUESTS[0]
+    assert payload["max_tokens"] == 1200
+    assert "options" not in payload
+    assert "def hello()" in json.dumps(payload)

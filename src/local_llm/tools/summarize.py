@@ -6,7 +6,7 @@ from local_llm.tools.common import bounded_text, fence_untrusted, load_source, w
 
 
 async def summarize(path: str, settings: Settings, client: ChatClient) -> str:
-    source = fence_untrusted(bounded_text(load_source(path, settings)))
+    source = fence_untrusted(bounded_text(load_source(path, settings), settings.prompt_char_budget))
     return await client.chat(
         f"Summarize purpose, symbols, dependencies and uncertainties.\n\n{source}",
         system=with_rules("You are a precise source-code analyst. Do not infer unseen behavior."),
