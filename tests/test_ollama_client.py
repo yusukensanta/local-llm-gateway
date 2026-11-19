@@ -20,7 +20,7 @@ async def test_chat_payload_and_response(mock_ollama: Install) -> None:
 
     mock_ollama(handler)
     settings = Settings(
-        ollama_base_url="http://unit.test/", allow_remote_ollama=True, max_output_tokens=77
+        ollama_base_url="http://unit.test/", allow_remote=True, max_output_tokens=77
     )
     assert await OllamaClient(settings).chat("hello", system="sys") == "ok"
     assert seen["url"] == "http://unit.test/api/chat"
@@ -29,7 +29,7 @@ async def test_chat_payload_and_response(mock_ollama: Install) -> None:
     assert payload["stream"] is False
     assert payload["think"] is False
     assert payload["model"] == "qwen2.5-coder:7b"
-    assert payload["options"] == {"num_predict": 77}
+    assert payload["options"] == {"num_predict": 77, "num_ctx": 8192}
     assert payload["messages"] == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "hello"},
@@ -104,3 +104,20 @@ async def test_chat_sends_think_when_enabled(mock_ollama: Install) -> None:
     mock_ollama(handler)
     await OllamaClient(Settings(think=True)).chat("p", system="s")
     assert seen["think"] is True
+
+
+async def test_http_error_includes_server_reason_and_context_hint(mock_ollama: Install) -> None:
+    reason = '{"error":"request (37195 tokens) exceeds the available context size (4096 tokens)"}'
+    mock_ollama(lambda _request: httpx.Response(400, text=reason))
+    with pytest.raises(OllamaError) as info:
+        await OllamaClient(Settings()).chat("p", system="s")
+    message = str(info.value)
+    assert "exceeds the available context size" in message
+    assert "LOCAL_LLM_CONTEXT_TOKENS" in message
+
+
+async def test_http_error_without_body_has_no_server_suffix(mock_ollama: Install) -> None:
+    mock_ollama(lambda _request: httpx.Response(500))
+    with pytest.raises(OllamaError) as info:
+        await OllamaClient(Settings()).chat("p", system="s")
+    assert "server said" not in str(info.value)

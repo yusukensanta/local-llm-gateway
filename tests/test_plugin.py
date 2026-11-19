@@ -96,13 +96,17 @@ def test_every_user_config_reference_is_declared(
 
 
 def test_env_vars_in_mcp_are_known_settings(mcp: dict[str, Any]) -> None:
+    from pydantic import AliasChoices
+
     from local_llm.config import Settings
 
-    aliases = {
-        str(f.validation_alias)
-        for f in Settings.model_fields.values()
-        if f.validation_alias is not None
-    }
+    aliases: set[str] = set()
+    for field in Settings.model_fields.values():
+        alias = field.validation_alias
+        if isinstance(alias, AliasChoices):
+            aliases.update(str(choice) for choice in alias.choices)
+        elif alias is not None:
+            aliases.add(str(alias))
     for name in mcp["mcpServers"]["local-llm"]["env"]:
         assert name in aliases or name == "UV_PROJECT_ENVIRONMENT", name
 
@@ -112,7 +116,11 @@ def test_user_config_defaults_pass_settings_validation(plugin: dict[str, Any]) -
 
     cfg = plugin["userConfig"]
     Settings(
-        ollama_model=cfg["ollama_model"]["default"],
+        model=cfg["model"]["default"],
         ollama_base_url=cfg["ollama_base_url"]["default"],
+        backend=cfg["backend"]["default"],
+        openai_base_url=cfg["openai_base_url"]["default"],
+        api_key=cfg["api_key"]["default"],
+        context_tokens=cfg["context_tokens"]["default"],
         workspace=ROOT,
     )

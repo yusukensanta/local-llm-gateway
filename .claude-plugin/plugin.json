@@ -2,25 +2,59 @@
   "name": "local-llm",
   "displayName": "Local LLM Gateway",
   "version": "0.1.0",
-  "description": "Read-only MCP tools (analyze, summarize, review diff, suggest tests) backed by a local Ollama model",
+  "description": "Read-only MCP tools (analyze, summarize, review diff, suggest tests) that delegate to a local LLM through Ollama or any OpenAI-compatible server",
   "author": {
     "name": "yusukensanta"
   },
   "repository": "https://github.com/yusukensanta/local-llm-gateway",
   "license": "MIT",
-  "keywords": ["mcp", "ollama", "local-llm", "code-review"],
+  "keywords": [
+    "mcp",
+    "local-llm",
+    "ollama",
+    "openai-compatible",
+    "lm-studio",
+    "llama-cpp",
+    "code-review"
+  ],
   "userConfig": {
-    "ollama_model": {
+    "model": {
       "type": "string",
       "title": "Ollama model",
-      "description": "Model name available in your Ollama install (for example qwen2.5-coder:7b or qwen3:4b-instruct)",
+      "description": "Model name as your backend knows it (for example qwen2.5-coder:7b on Ollama, or the model id shown by LM Studio)",
       "default": "qwen2.5-coder:7b"
     },
     "ollama_base_url": {
       "type": "string",
       "title": "Ollama URL",
-      "description": "Ollama API endpoint. Must be local or on a private network; source text is sent to it",
+      "description": "Ollama API endpoint, used when the backend is ollama. Must be local or on a private network; source text is sent to it",
       "default": "http://localhost:11434"
+    },
+    "backend": {
+      "type": "string",
+      "title": "Backend",
+      "description": "ollama (native API) or openai (any OpenAI-compatible server such as LM Studio, llama.cpp, vLLM)",
+      "default": "ollama"
+    },
+    "openai_base_url": {
+      "type": "string",
+      "title": "OpenAI-compatible URL",
+      "description": "Base URL ending in /v1; used only when the backend is openai. Must be local or private",
+      "default": "http://localhost:1234/v1"
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "Optional bearer token for the OpenAI-compatible server; leave empty if none",
+      "sensitive": true,
+      "default": ""
+    },
+    "context_tokens": {
+      "type": "number",
+      "title": "Context tokens",
+      "description": "Context window the model is served with. Sets num_ctx for Ollama and how much source is sent",
+      "default": 8192,
+      "min": 1024
     }
   }
 }

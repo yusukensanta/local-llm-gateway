@@ -6,7 +6,7 @@ from local_llm.tools.common import bounded_text, fence_untrusted, load_source, w
 
 
 async def generate_tests(path: str, settings: Settings, client: ChatClient) -> str:
-    source = fence_untrusted(bounded_text(load_source(path, settings)))
+    source = fence_untrusted(bounded_text(load_source(path, settings), settings.prompt_char_budget))
     return await client.chat(
         "Propose focused unit tests, edge cases and suggested test names. Do not write files.\n\n"
         + source,

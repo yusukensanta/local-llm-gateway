@@ -1,7 +1,7 @@
 """Shared source loading helpers."""
 
-from local_llm.config import Settings
-from local_llm.security.workspace import MAX_PROMPT_CHARS, collect_text_files, resolve_allowed_path
+from local_llm.config import MAX_PROMPT_CHARS, Settings
+from local_llm.security.workspace import collect_text_files, resolve_allowed_path
 
 OUTPUT_RULES = (
     "Output rules: give the final answer only. Do not narrate your plan, restate the task, "

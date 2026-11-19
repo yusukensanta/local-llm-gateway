@@ -56,9 +56,6 @@ SENSITIVE_FILE_PATTERNS = (
 )
 SENSITIVE_FILE_ALLOWLIST = frozenset({".env.example", ".env.sample", ".env.template"})
 
-MAX_PROMPT_CHARS = 80_000
-"""Upper bound on source text sent to the model; collection stops reading once it is reached."""
-
 
 class WorkspaceError(ValueError):
     """Workspace access policy violation."""
@@ -167,7 +164,7 @@ def collect_text_files(path: Path, settings: Settings) -> str:
     chunks: list[str] = []
     total_chars = 0
     for candidate in _iter_candidates(path):
-        if len(chunks) >= settings.max_files or total_chars >= MAX_PROMPT_CHARS:
+        if len(chunks) >= settings.max_files or total_chars >= settings.prompt_char_budget:
             break
         try:
             real = candidate.resolve(strict=True)

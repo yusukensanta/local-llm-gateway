@@ -2,8 +2,8 @@
 
 from mcp.server.mcpserver import MCPServer
 
+from local_llm.clients import build_client
 from local_llm.config import get_settings
-from local_llm.ollama_client import OllamaClient
 from local_llm.tools.analyze import analyze
 from local_llm.tools.generate_tests import generate_tests
 from local_llm.tools.review import review_diff
@@ -11,7 +11,7 @@ from local_llm.tools.summarize import summarize
 
 mcp = MCPServer("local-llm")
 settings = get_settings()
-client = OllamaClient(settings)
+client = build_client(settings)
 
 
 @mcp.tool()
